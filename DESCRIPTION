@@ -1,0 +1,33 @@
+Package: insee.admin
+Title: Unify and Prepare INSEE Administrative Areas at Various Scales including Spatial Files
+Version: 0.0.0.9000
+Authors@R: 
+    person("Alexis", "Bourgeois", , "acidybee@proton.me", role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0009-8513-1715"))
+Description: Unify and Prepare INSEE Administrative Areas at Various Scales including Spatial Files.
+License: MIT + file LICENSE
+Depends: 
+    R (>= 3.5)
+Imports: 
+    dplyr (>= 1.1.1),
+    glue,
+    logger,
+    magrittr,
+    purrr (>= 1.0.0),
+    readxl (>= 1.4.0),
+    rlang (>= 1.0.0),
+    sf,
+    stringr,
+    tidyr,
+    tidyselect (>= 1.1.0)
+Suggests: 
+    ggplot2,
+    insee.admin.data.2022,
+    knitr,
+    rmarkdown,
+    tibble (>= 3.1.0)
+VignetteBuilder: 
+    knitr
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3

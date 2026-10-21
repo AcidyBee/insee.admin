@@ -1,0 +1,922 @@
+---
+title: "decoupage-admin-semantic"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{decoupage-admin-semantic}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+## Parametrage du theme ggplot
+ggplot2::theme_set(ggplot2::theme_minimal())
+# theme_update(panel.background = element_rect(fill = "transparent", colour = NA),
+#              plot.background = element_rect(fill = "transparent", colour = NA))
+# opts_chunk$set(dev.args=list(bg="transparent"))
+```
+
+```{r setup}
+library(insee.admin)
+requireNamespace("insee.admin.data.2022", quietly = TRUE)
+```
+
+# Notes de l'INSEE
+
+## IRIS
+
+Les communes d'au moins 10 000 habitants et la plupart des communes de 5 000 à 10 000 habitants sont découpées en IRIS. Ce découpage, maille de base de la diffusion de statistiques infracommunales, constitue une partition du territoire de ces communes en "quartiers" dont la population est de l'ordre de 2 000 habitants. La France compte environ 15 500 IRIS dont 750 pour les DOM.
+
+Par extension, afin de couvrir l'ensemble du territoire, on assimile à un IRIS chacune des communes non découpées en IRIS.
+
+source: https://www.insee.fr/fr/statistiques/4799305#documentation
+
+IRIS : code du département suivi du numéro de commune ou du numéro d'arrondissement municipal suivi du numéro d'IRIS
+
+La modalité "ZZZZZZZZZ" correspond à une commune non découpée en IRIS
+
+Pour le fichier individus 'localisation au canton-ou-ville' :
+La modalité définie par le code commune (ou le code arrondissement municipal pour Paris, Lyon et
+Marseille) suivi de "XXXX" correspond aux IRIS de la commune comptant moins de 200 habitants. TOCHECK: vérifier si l'atome est l'agrégation de ces IRIS sur la commune...
+
+source: https://www.insee.fr/fr/information/2383182
+
+### Type d'IRIS
+
+On distingue trois types d'IRIS :
+
+ - les IRIS d'habitat (code H) : leur population se situe en général entre 1 800 et 5 000 habitants. Ils sont homogènes quant au type d'habitat et leurs limites s'appuient sur les grandes coupures du tissu urbain (voies principales, voies ferrées, cours d'eau, ...)
+ - les IRIS d'activité (code A) : ils regroupent environ 1 000 salariés et comptent au moins deux fois plus d'emplois salariés que de population résidente
+ - les IRIS divers (code D) : il s'agit de grandes zones spécifiques peu habitées et ayant une superficie importante (parcs de loisirs, zones portuaires, forêts, ...).
+
+Pour les communes non découpées en IRIS, le type de l'IRIS est codé à Z.
+
+source: https://www.insee.fr/fr/information/2438155
+
+## Notes lien data spatial et semantic
+
+Les fichiers détail anonymisés permettent aux utilisateurs professionnels un usage personnalisé des données du recensement de la population :
+
+    analyses exploratoires de données ;
+    modélisation des comportements ;
+    tabulation sur une sous-population particulière.
+
+À la différence des tableaux dynamiques et des bases du Recensement de la Population 2020 diffusés en géographie 2023, les données des fichiers détail sont restituées dans la géographie de production, soit au 1er janvier 2022. C'est donc le millésime 2022 des contours IRIS qui doit être utilisé pour les correspondances avec fichier détail 2020 de l'INSEE.
+
+# Données spatiales du découpage admin
+
+Vérification de l'importation et des variables du fichier géographique. La correspondance est parfaite entre données spatiales et données du découpage administratif. La jointure a été automatisée.
+
+Les données IGN définissent 2 échelles de granularité distinctes:
+
+- IRIS
+- COMMUNE
+
+Les autres, et notamment le code_cv utile pour le fichier INSEE detail RP INVCVI, doit être associé au fichier si besoin...
+
+## Importation automatisée
+
+Les importations peuvent être faites directement avec sf :) Le CRS du fichier source est Lambert-93 (pour la métropole).... Seule la métropole est importée.
+
+```{r}
+## Chemin pour les données 2015:
+## les fichiers sont très volumineux et ils sont stockés hors des packages dans le répertoire DB/IGN
+# path2data <- "/Users/Alexis/Documents/Travail/DB/IGN/IRIS/2015/CONTOURS-IRIS_2-1__SHP_LAMB93_FXX_2016-11-10/CONTOURS-IRIS/1_DONNEES_LIVRAISON_2015/CONTOURS-IRIS_2-1_SHP_LAMB93_FE-2015"
+# file_name <- "CONTOURS-IRIS"
+```
+
+```{r}
+# IRIS_2015_metropole <- sf::st_read(dsn = path2data, layer = file_name)
+```
+
+Il y a 48580 polygones correspondants aux IRIS du millésime 2022.
+
+```{r}
+## Edition 2022
+# path_to_contours_IRIS_2022 <- "/Users/Alexis/Documents/Travail/DB/IGN/IRIS/2022/CONTOURS-IRIS_2-1__SHP__FRA_2022-01-01.7z"
+# sf_IRIS_2022 <- sf::st_read(dsn = path_to_contours_IRIS_2022)
+## Il semble qu'il faille aller chercher directement le shapefile: et donc on n'importe ici que la métropole
+# path_to_contours_IRIS_2022 <- "/Users/Alexis/Documents/Travail/DB/IGN/IRIS/2022/CONTOURS-IRIS_2-1__SHP__FRA_2022-01-01/CONTOURS-IRIS/1_DONNEES_LIVRAISON_2022-06-00180/CONTOURS-IRIS_2-1_SHP_LAMB93_FXX-2022"
+path_to_contours_IRIS_2022 <- insee.admin.data.2022::path_to_extdata("IGN/CONTOURS-IRIS")
+sf_IRIS_2022_manual <- sf::st_read(dsn = path_to_contours_IRIS_2022, layer = "CONTOURS-IRIS")
+# ## Edition 2023
+# # # path_to_contours_IRIS_2023 <- "/Users/Alexis/Documents/Travail/DB/IGN/IRIS/2023/CONTOURS-IRIS_2-1__SHP__FRA_2023-01-01.7z"
+# path_to_contours_IRIS_2023 <- "/Users/Alexis/Documents/Travail/DB/IGN/IRIS/2023/CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01/CONTOURS-IRIS/1_DONNEES_LIVRAISON_2024-02-00238/CONTOURS-IRIS_3-0_SHP_LAMB93_FXX-ED2023-01-01"
+# sf_IRIS_2023_manual <- sf::st_read(dsn = path_to_contours_IRIS_2023, layer = "CONTOURS-IRIS")
+```
+
+Test de la fonction auto `pipeline_sf_IRIS` crée dans `RP-decoupage-admin.R`: OK
+
+```{r}
+sf_IRIS_2022 <- pipeline_sf_IRIS(dsn = path_to_contours_IRIS_2022)
+identical(
+  sf_IRIS_2022_manual %>% 
+    dplyr::select("CODE_IRIS", LIB_IRIS = "NOM_IRIS", "TYP_IRIS", COM_ARM_CODE = "INSEE_COM", COM_ARM_LIB = "NOM_COM", "geometry") %>% 
+    unify_admin_code(), 
+  sf_IRIS_2022)
+```
+
+Tracé avec ggplot2 des IRIS pour DEP 75:
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_IRIS_2022 %>% 
+  dplyr::filter(stringr::str_detect(.data$com_arm_code, "^75")) %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+Nombre d'IRIS et des COM pour le millésime 2022
+
+```{r}
+sf_IRIS_2022 %>% 
+  sf::st_drop_geometry() %>% 
+  # as.data.frame() %>% 
+  dplyr::summarise(
+    n_distinct_IRIS = dplyr::n_distinct(.data$iris_code),
+    n_distinct_COM_ARM = dplyr::n_distinct(.data$com_arm_code)
+  )
+```
+
+## Variables du fichier
+
+Le code IRIS s'obtient par concaténation de INSEE_COM et IRIS. Les communes non-découpées en IRIS, ont la variable IRIS == "0000"...
+On choisi de ne pas importer IRIS, car iris_code est la concaténation de com_arm_code et IRIS, et c'est ce code (ou la concaténation des 2 autres) qui identifie chaque polygone de façon unique.
+
+```{r}
+cat("Noms des variables dans le fichier IGN:\n")
+names(sf_IRIS_2022_manual)
+cat("Codes des variables normalisés du fichier IGN:\n")
+names(sf_IRIS_2022)
+```
+
+Les codes variables sont unifiés pour correspondre entre les différents fichiers INSEE.
+
+# Découpage administratif lié au RP
+
+Version 2022 pour fichiers détail 2020...
+
+Il n'existe pas de fichier qui relie tous les niveaux de granularité de l'infracommunal (IRIS) au supracommunal (CV, DEP, REG). Il faut en créer un à partir des différents fichiers INSEE.
+
+Il n'y a pas d'unification des noms de variable entre les différents fichiers INSEE et IGN, même si une correspondance biunivoque existe entre les observations des fichiers IGN CONTOURS_IRIS et INSEE decoupage-IRIS.
+
+- CODE_IRIS et TYP_IRIS existent bien dans les 2 fichiers
+- LIB_IRIS (insee) = NOM_IRIS (ign), DEPCOM (insee) = INSEE_COM (ign) & LIBCOM (insee) = NOM_COM (ign)
+
+Attention: il y a une erreur dans les fichiers de découpage IRIS pour 5 observation dans la colonne UU2020. Cette erreur corrigée dans les tables supracommunales n'est toujours pas corrigée au 1er janvier 2025.
+
+## Découpage infracommunal
+
+La table des IRIS est récupérée par le lien suivant: https://www.insee.fr/fr/information/7708995
+
+```{r}
+# path_to_decoupage_IRIS_2022 <- "/Users/Alexis/Documents/Travail/DB/INSEE/Geo/Infracommunal/reference_IRIS_geo2022.xlsx" # /Temp
+
+path_to_decoupage_IRIS_2022 <- insee.admin.data.2022::path_to_extdata("decoupage-admin/reference_IRIS_geo2022.xlsx")
+decoupage_iris_2022 <-readxl::read_excel(path_to_decoupage_IRIS_2022, skip = 5)
+# path_to_decoupage_IRIS_2023 <- "/Users/Alexis/Documents/Travail/DB/INSEE/Geo/Infracommunal/Temp/reference_IRIS_geo2023.xlsx"
+# decoupage_iris_2023 <-readxl::read_excel(path_to_decoupage_IRIS_2023, skip = 5)
+# # identical(decoupage_iris_2022, decoupage_iris_2023)
+```
+
+### Variables du fichier
+
+A part DEP et REG, les variables du fichier sont infra-communales. Il n'y a pas notamment la variable CV (canton ou ville) qui est nécessaire à la jointure avec le fichier détail INDCVI. Il faudra l'ajouter à partir du fichier supra-communal.
+
+DONE: fabriquer un outil pour vérifier l'emboîtement des différentes échelles géographiques !!! Un premier outil a été créé.
+
+```{r}
+names(decoupage_iris_2022) #%>% dput()
+```
+
+### Description des granularités
+
+2022: on a bien le même nombre de IRIS et COM que celui donné pour le fichier spatial de la métropole: correspondance parfaite.
+
+```{r}
+decoupage_iris_2022 %>% 
+  # dplyr::distinct(.data$REG)
+  # retrait des régions non-métropole
+  dplyr::filter(!.data$REG %in% c("01", "02", "03", "04", "06")) %>%
+  dplyr::summarize(
+    n_total = dplyr::n(),
+    n_distinct_IRIS = dplyr::n_distinct(CODE_IRIS),
+    n_distinct_COMMUNE = dplyr::n_distinct(DEPCOM),
+    n_distinct_DEP = dplyr::n_distinct(DEP),
+    n_distinct_REG = dplyr::n_distinct(REG)
+  )
+```
+
+### Comparaison IRIS et COM avec le fichier spatial
+
+Ce sont bien les mêmes IRIS et les mêmes COM dans les 2 fichiers !!
+
+Cependant, il n'y a pas d'unification des noms de variable entre les différents fichiers INSEE et IGN, même si une correspondance biunivoque existe entre les observations des fichiers IGN CONTOURS_IRIS et INSEE decoupage-IRIS.
+
+- CODE_IRIS et TYP_IRIS existent bien dans les 2 fichiers
+- LIB_IRIS (insee) = NOM_IRIS (ign), DEPCOM (insee) = INSEE_COM (ign) & LIBCOM (insee) = NOM_COM (ign)
+
+Dans ces 2 fichiers, les communes ne sont pas celles retrouvées dans le COG: ce-sont des communes qui intègrent le découpage par ARM pour les 3 communes avec ARM. On distinguera les noms de variable pour les rendre plus consistants:
+
+- codes intégrant le découpage des communes avec ARM: com_arm_code
+- code communes du COG supracommunal: com_code
+
+IRIS
+
+```{r}
+dplyr::anti_join(
+  sf::st_drop_geometry(sf_IRIS_2022), 
+  unify_admin_code(decoupage_iris_2022), 
+  by = "iris_code"
+  )
+## decoupage_iris pour la metropole
+dplyr::anti_join(
+  decoupage_iris_2022 %>% 
+  # retrait des régions non-métropole
+  dplyr::filter(!.data$REG %in% c("01", "02", "03", "04", "06")) %>%
+  unify_admin_code(), 
+  sf::st_drop_geometry(sf_IRIS_2022), 
+  by = "iris_code"
+  )
+```
+
+COM
+
+```{r}
+dplyr::anti_join(
+  sf::st_drop_geometry(sf_IRIS_2022), 
+  unify_admin_code(decoupage_iris_2022), 
+  by = "com_arm_code"
+  )
+## decoupage_iris pour la metropole
+dplyr::anti_join(
+  decoupage_iris_2022 %>% 
+  # retrait des régions non-métropole
+  dplyr::filter(!.data$REG %in% c("01", "02", "03", "04", "06")) %>%
+  unify_admin_code(), 
+  sf::st_drop_geometry(sf_IRIS_2022), 
+  by = "com_arm_code"
+  )
+```
+
+<!-- en 2023: il y a 7 IRIS de plus, mais les autres découpages restent identiques -->
+
+<!-- ```{r} -->
+<!-- # decoupage_iris_2023 %>%  -->
+<!-- #   dplyr::summarize( -->
+<!-- #     n_total = dplyr::n(), -->
+<!-- #     n_distinct_IRIS = dplyr::n_distinct(CODE_IRIS), -->
+<!-- #     n_distinct_COMMUNE = dplyr::n_distinct(DEPCOM), -->
+<!-- #     n_distinct_DEP = dplyr::n_distinct(DEP), -->
+<!-- #     n_distinct_REG = dplyr::n_distinct(REG) -->
+<!-- #   ) -->
+<!-- ``` -->
+
+### Description des emboitements
+
+DONE: trouver une méthode pour décrire la hiérarchie des emboîtements. La méthode extrait les lignes pour lesquelles la hiérarchie n'est pas respectée.
+
+1er test: une hiérarchie de type mère fille existe si par exemple un IRIS donné (fille) ne peux être trouvé que pour une seule commune (mère)
+
+```{r}
+## tests: Il y a bel est bien une hiérarchie entre les différents niveaux administratifs décrits ici
+decoupage_iris_2022 %>% 
+  keep_non_hierarchic_rows(DEPCOM, CODE_IRIS)
+decoupage_iris_2022 %>% 
+  keep_non_hierarchic_rows(DEP, DEPCOM)
+decoupage_iris_2022 %>% 
+  keep_non_hierarchic_rows(REG, DEP)
+```
+
+Recherche des NA: il n'y en a de toutes façon aucune
+
+```{r}
+decoupage_iris_2022 %>% 
+  is.na() %>% 
+  colSums()
+```
+
+Inversion parent et enfant pour REG et DEP:
+
+```{r}
+## test lorsqu'on inverse parent et enfant pour REG et DEP
+## étonnant tous les DEP et REG ne sortent pas
+decoupage_iris_2022 %>% 
+  keep_non_hierarchic_rows(DEP, REG)
+```
+
+Les DEP hors métropole correspondent à des REG distinctes. Les fonctions donnent les résultats attendus !
+
+```{r}
+decoupage_iris_2022 %>% 
+  discard_non_hierarchic_rows(DEP, REG)
+```
+
+Quelle est la forme de DEPCOM & LIBCOM pour les communes avec Arrondissement municipaux: Lyon, Marseille et PARIS ? Ils sont données comme CODEGEO de l'onglet ARM du fichier supracommunal. Ex avec Paris, ce-sont les mêmes modalités que pour les fichiers spatiaux de l\\'IGN.
+
+```{r}
+decoupage_iris_2022 %>% 
+  dplyr::filter(stringr:::str_detect(DEPCOM, "^75"))
+```
+
+Distribution des TYP_IRIS: 33060 communes non-découpées en IRIS
+
+```{r}
+decoupage_iris_2022 %>% 
+  dplyr::count(.data$TYP_IRIS)
+```
+
+### Jointure avec les jeux de données spatiaux
+
+CODE_IRIS présents dans le fichier contours IRIS de l\\'IGN, mais pas dans le découpage administratif de l'INSEE: aucun. Pour chaque millésime (2022 et 2023), tous les IRIS de la métropole sont bien présents dans le découpage administratif. 
+
+```{r}
+dplyr::anti_join(sf_IRIS_2022_manual, decoupage_iris_2022, by = "CODE_IRIS") %>% 
+  NROW() #%>%
+  # ggplot2::ggplot() +
+  # ggplot2::geom_sf(fill = "red") +
+  # ggplot2::coord_sf()
+  # # ggplot2::coord_sf(crs = sf::st_crs(4326))
+# dplyr::anti_join(sf_IRIS_2023_manual, decoupage_iris_2023, by = "CODE_IRIS") %>% 
+#   NROW()
+```
+
+CODE_IRIS présents dans le découpage administratif de l'INSEE, mais pas dans le fichier contours IRIS: 817/827, tous hors métropole...A noter que les fichiers géographiques sont séparés selon leur projection, et seul le fichier correspondant à la métropole a été importé. Conclusion: pour les données de la métropole, il y a bien correspondance entre les 2 fichiers pour nos 2 millésimes. TOCHECK: On peut s'attendre à ce qu'il y ait une correspondance aussi pour les projection avec les DOM...
+
+```{r}
+dplyr::anti_join(decoupage_iris_2022, sf_IRIS_2022_manual, by = "CODE_IRIS") %>% 
+  dplyr::count(.data$DEP)
+# dplyr::anti_join(decoupage_iris_2023, sf_IRIS_2023_manual, by = "CODE_IRIS") %>% 
+#   dplyr::count(DEP)
+```
+
+## Découpage supracommunal et lien découpage communal et infracommunal
+
+Pour réaliser une jointure aux différentes granularités permises par le fichier détail INSEE INDCVI, il faut pouvoir ajouter le niveau canton-ville (CV) au fichier infra-communal contenant le niveau IRIS. Le problème est que les 2 fichiers n'utilisent pas le même code pour décrire la commune qui est le niveau géographique approprié pour réaliser la jointure.
+
+La table du découpage communal est récupérée par le lien suivant: https://www.insee.fr/fr/information/7671844
+
+Pour permettre, un lien hiérarchique consistant entre les différents niveaux administratifs, il y a une subtilité dans les codes de communes pour les 3 communes françaises avec arrondissements (Lyon, Marseille et Paris). Cela oblige à unir 2 fichiers différents pour reconstruire une hiérarchie consistante entre code IRIS, code COMunne et code CV (canton-ville) entre le découpage admin et les projection spatiales !
+Dans ces conditions: il faut unir 2 fichiers supra-communaux ensemble:
+
+- les communes avec arrt
+- les communes sans arrt
+- puis les attribuer à leur IRIS respectif du découpage infra-communal
+
+```{r}
+## Communes sans découpage par arrt
+# path_to_decoupage_communal_2022 <- "/Users/Alexis/Documents/Travail/DB/INSEE/Geo/Communal/table-appartenance-geo-communes-22.xlsx"
+path_to_decoupage_communal_2022 <- insee.admin.data.2022::path_to_extdata("decoupage-admin/table-appartenance-geo-communes-22.xlsx")
+decoupage_communal_2022 <-readxl::read_excel(path_to_decoupage_communal_2022, skip = 5)
+# path_to_decoupage_communal_2023 <- "/Users/Alexis/Documents/Travail/DB/INSEE/Geo/Communal/table-appartenance-geo-communes-23.xlsx"
+# decoupage_communal_2023 <-readxl::read_excel(path_to_decoupage_communal_2023, skip = 5)
+## Communes avec découpage par arrt (onglet 2 du fichier)
+decoupage_communal_arm_2022 <-readxl::read_excel(path_to_decoupage_communal_2022, skip = 5, sheet = 2)
+# decoupage_communal_arr_2023 <-readxl::read_excel(path_to_decoupage_communal_2023, skip = 5, sheet = 2)
+
+## Lien entre label et code pour les variables avec un niveau géographique au dessus du découpage communal
+lut_code_label_2022 <-readxl::read_excel(path_to_decoupage_communal_2022, skip = 5, sheet = 3)
+test <- lut_code_label_2022 %>% 
+  tidyr::nest(c("CODGEO", "LIBGEO", "NB_COM"))
+
+test$data[[2]]
+
+create_COG_lut_old <- function(data) {
+  lut <- data[["LIBGEO"]]
+  names(lut) <- data[["CODGEO"]]
+  lut
+}
+
+create_COG_lut_old(test$data[[2]]) %>% head()
+
+
+cv_codes <- c("0101", "0107")
+create_COG_lut(test$data[[2]])[cv_codes] %>% unname()
+```
+
+```{r}
+# test
+lut_code_label_2022 %>% 
+  dplyr::group_by(NIVGEO) %>% 
+  tidyr::chop(cols = c("CODGEO", "LIBGEO", "NB_COM")) %>% 
+  dplyr::rename(code = "CODGEO", label = "LIBGEO") %>% 
+  dplyr::mutate(name_geo_level = .data$NIVGEO)
+
+test <- lut_code_label_2022 %>% 
+  dplyr::rename(name_geo_level = "NIVGEO", code = "CODGEO", label = "LIBGEO", com_nb = "NB_COM") %>% 
+  dplyr::mutate(name_geo_level = .data$name_geo_level %>% tolower()) %>%
+  tidyr::nest(data = c("code", "label", "com_nb"))
+
+test$data[[2]] %>% # CV
+  ## rename
+  dplyr::rename_with(.fn = ~paste("cv", .x, sep = "_"), .cols = c("code", "label"))
+
+
+## Permet de renommer correctement tous les df !!!! OK
+## On obtient toutes les tables de correspondances entre code et label pour tous les niveaux géographiques supracommunaux
+## TODO: Il faut maintenant faire des left_join de chacun...
+test2 <- test %>% 
+  dplyr::mutate(data = purrr::map2(data, name_geo_level, .f = \(x, y)
+             x %>% dplyr::rename_with(~ paste(y, ., sep = "_"), 
+                                       .cols = c("code", "label", "com_nb"))
+              ))
+
+## Création de la fonction qui construit un tidy dict entre code et label, nested par niveau geographique du cog
+create_cog_nested_dict_backup <- function(path, sheet = 3L, skip = 5) {
+  # Importation du dataset cummulant tous les niveaux géographiques dans la même colonne
+  readxl::read_excel(path = path, sheet = sheet, skip = skip) %>% 
+    # modification des noms de colonnes
+    dplyr::rename(name_geo_level = "NIVGEO", code = "CODGEO", label = "LIBGEO", com_nb = "NB_COM") %>% 
+    dplyr::mutate(name_geo_level = .data[["name_geo_level"]] %>% tolower()) %>%
+    # séparation en autant de datasets que de niveaux géographiques
+    tidyr::nest(data = c("code", "label", "com_nb"))
+}
+test1 <- create_cog_nested_dict_backup(path_to_decoupage_communal_2022)
+test2 <- create_cog_nested_dict(path_to_decoupage_communal_2022)
+identical(test, test1)
+identical(test2, test1)
+```
+
+Création d'une nested lut
+
+```{r}
+create_COG_lut_backup <- function(data) {
+  # Création d'une lut à partir de `code` et `label`
+  lut <- data[["label"]]
+  names(lut) <- data[["code"]]
+  lut
+}
+## utilisation pour un élément de data: OK
+create_COG_lut(test1$data[[2]]) %>% 
+  head()
+## Application à tous les datasets de data
+test2 <- test1 %>% 
+  dplyr::mutate(data = purrr::map(data, create_COG_lut))
+
+test2[[2]][[2]] %>% head()
+
+cv_codes <- c("0101", "0107")
+create_COG_lut(test1$data[[2]])[cv_codes] %>% unname()
+
+## Fonction de création lut entre code et label, nested par niveau geographique du cog
+create_cog_nested_lut_backup <- function(path, sheet = 3L, skip = 5) {
+  # création du nested dict
+  create_cog_nested_dict(path = path, sheet = sheet, skip = skip) %>% 
+    dplyr::mutate(
+      # création d'une tibble de lut: application de la lut à chaque sous-dataset
+    data = purrr::map(data, create_COG_lut),
+      # ajout d'un suffixe "_code" au nom du niveau geo pour faciliter l'application de la lut
+    name_geo_level = paste0(.data[["name_geo_level"]], "_code")
+      )
+}
+## test de la fonction: OK
+test3 <- create_cog_nested_lut(path_to_decoupage_communal_2022)
+all.equal(test2, test3)
+test3
+```
+
+
+Création d'une fonction pour ajouter le libellé pour un code donné:
+
+```{r}
+test3 %>% 
+  dplyr::filter(.data$name_geo_level == "cv_code") %>% 
+  dplyr::pull(data) %>% 
+  `[[`(1) %>% 
+  `[`(cv_codes) %>% 
+  unname()
+
+## Extract individual cog lut for a given geo level thanks to name_geo_level
+extract_individual_cog_lut_backup <- function(cog_nested_lut, unique_geo_level) {
+  cog_nested_lut %>% 
+          dplyr::filter(.data$name_geo_level == unique_geo_level) %>% 
+          dplyr::pull(data) %>%
+          `[[`(1)
+}
+## test
+test4 <- extract_individual_cog_lut(test3, "cv_code")
+
+test4[cv_codes] %>% head()
+
+## cette fonction prend le dataset admin à augmenter les labels en entrée
+## mais aussi le cog_nested_lut par niveau geographique
+augment_admin_label_from_code_backup <- function(data, cog_nested_lut, .cols = dplyr::everything()) {
+  data %>% 
+    dplyr::mutate(
+      dplyr::across(
+        .cols = .cols, 
+        .fns = \(x) cog_nested_lut %>% 
+          extract_individual_cog_lut(dplyr::cur_column()) %>% 
+          `[`(x) %>% 
+          unname(),
+        .names = "{sub('code', 'label', col)}"
+      ))
+}
+
+test4 <- insee.admin.data.2022::insee_admin_decoupage %>% 
+  augment_admin_label_from_code(test3, .cols = c("cv_code", "dep_code", "reg_code"))
+test5 <- insee.admin.data.2022::insee_admin_decoupage %>% 
+  augment_admin_label_from_code_backup(test3, .cols = dplyr::all_of(c("cv_code", "dep_code", "reg_code")))
+## C'est bon: seul l'ordre des colonnes change dans les 2 fonctions
+identical(test4, test5 %>% dplyr::select(dplyr::all_of(names(test4))))
+
+## Les 2 fonctions donnent bien le même résultat
+test6 <- insee.admin.data.2022::insee_admin_decoupage %>% 
+  augment_admin_label_from_code_2(test3, .cols = dplyr::all_of(c("cv_code", "dep_code", "reg_code")))
+identical(test4, test6)
+
+# Avec des colonnes code
+data <- tibble::tibble(reg_code = c("11", "24"), dep_code = c("75", "13"))
+result <- augment_admin_label_from_code_2(data, test3)
+
+# Résultat contiendra :
+# region_code, region_label, dep_code, dep_label
+```
+
+Il y a moins de communes dans l'onglet `decoupage_communal` du fichier `table-appartenance-geo-communes` que dans l'onglet `infracommunal`; c'est lié au découpage par arrondissements pour Marseille, Lyon et Paris. Pour autant, le code "CV" reste identique avec ou sans découpage en arrondissement...
+
+```{r}
+decoupage_communal_2022 %>% 
+  dplyr::summarize(
+    n_total = dplyr::n(),
+    n_distinct_COMMUNE = dplyr::n_distinct(CODGEO),
+    n_distinct_CANTVILLE = dplyr::n_distinct(CV),
+    n_distinct_DEP = dplyr::n_distinct(DEP),
+    n_distinct_REG = dplyr::n_distinct(REG)
+  )
+```
+
+Test du lien hiérarchique entre commune et cantville:
+
+```{r}
+keep_non_hierarchic_rows(decoupage_communal_2022, CV, CODGEO)
+```
+
+Et recherche des NA: aucunes.
+
+```{r}
+decoupage_communal_2022 %>% 
+  is.na() %>% 
+  colSums()
+```
+
+...dans aucune des 2 bases !!!
+
+```{r}
+decoupage_communal_arm_2022 %>% 
+  is.na() %>% 
+  colSums()
+```
+
+Et pourtant, ici il n'y a pas de NA de CV, alors qu'il y en a après le merge !!!
+
+```{r}
+decoupage_communal_2022 %>% 
+  dplyr::filter(CODGEO == "74037")
+```
+
+Le problème ne vient pas du bind pour les 2 onglets du niveau communal: pour lequel il y a bien un CV de défini
+
+```{r}
+# decoupage_communal_2022_cured <- 
+bind_decoupage_admin_commune(path_to_decoupage_communal_2022) %>% 
+  dplyr::filter(com_arm_code == "74037")
+```
+
+...mais de la jointure avec le découpage IRIS pour lequel un code erroné est trouvé pour 5 UU2020
+
+```{r}
+
+```
+
+Pour Paris à partir du fichier infracommunal (en prenant le premier IRIS de chaque DEPCOM)
+
+```{r}
+decoupage_iris_2022 %>% 
+  dplyr::filter(DEP == "75") %>% 
+  dplyr::group_by(.data$DEPCOM) %>% 
+  dplyr::slice_head(n = 1)
+```
+
+Pour le fichier communal sans découpage par arrt: il n'y a qu'un `CODGEO` pour Paris plutôt que les différents code `DEPCOM` que l'on trouve dans le fichier infracommunal...
+
+```{r}
+decoupage_communal_2022 %>% 
+  dplyr::filter(DEP == "75")
+```
+
+Dans le fichier avec le découpage par arrt municipaux ARM (onglet 2), on retrouve les mêmes code de commune (colonne CODGEO) que dans le découpage infracommunal (colonne DEPCOM). Note: A part l'information concernant les ARM, toutes les lignes contiennent la même information dans les fichiers infra et supracommunaux. Le fichier avec découpage des communes pour les ARM, contient également le com_code des autres fichiers du COG...Il suffit donc de rajouter les colonnes `com_arm_(code|lib)`.
+
+```{r}
+decoupage_communal_arm_2022 %>% 
+  dplyr::filter(DEP == "75")
+```
+
+Pour faire le lien entre commune et canton-ville pour les IRIS, il faut lier les 2 fichiers supracommunaux (arrt municipaux + sans arrt) ensemble, avant de les joindre au fichier infracommunal...
+
+## Création du pipeline d'emboitement hierarchique géographique
+
+Gestion des niveaux supracommunaux avec et sans découpage des ARM:
+
+```{r}
+decoupage_communal_2022 <- bind_decoupage_admin_commune(path_to_decoupage_communal_2022)
+```
+
+Une fois retiré le UU2020 pour le découpage par IRIS, le pipeline permet de relier tous les niveaux géographiques dans un même fichier.
+
+```{r}
+# readxl::read_excel(path_to_decoupage_communal_2022, skip = 5, sheet = 1) %>% dplyr::filter(CV %in% c("1398", "69ZZ", "75ZZ"))
+# decoupage_communal_2022 <- bind_decoupage_admin_commune(path_to_decoupage_communal_2022)
+# path_to_decoupage_communal_2024 <- insee.admin.data.2022::path_to_extdata("decoupage-admin/table-appartenance-geo-communes-2024.xlsx")
+
+# path_to_decoupage_iris_2022 <- "/Users/Alexis/Documents/Travail/DB/INSEE/Geo/Infracommunal/Temp/reference_IRIS_geo2022.xlsx"
+decoupage_admin_2022 <- pipeline_decoupage_admin(path_to_decoupage_IRIS_2022, path_to_decoupage_communal_2022)
+# path_to_decoupage_iris_2023 <- "/Users/Alexis/Documents/Travail/DB/INSEE/Geo/Infracommunal/Temp/reference_IRIS_geo2023.xlsx"
+# decoupage_admin_2023 <- pipeline_decoupage_admin(path_to_decoupage_iris_2023, path_to_decoupage_communal_2023)
+# decoupage_admin_2022
+# decoupage_admin_global <- pipeline_decoupage_admin(path_to_decoupage_IRIS_2022, path_to_decoupage_communal_2024)
+
+```
+
+```{r}
+# decoupage_admin_2022 %>% 
+#   dplyr::filter(
+#     # com_lib.x != com_lib.y
+#     uu2020.x != uu2020.y
+#     # dep.x != dep.y
+#     # reg.x != reg.y
+#     ) %>% 
+#   dplyr::relocate(uu2020.y, .after = uu2020.x)
+```
+
+
+Vérification du lien hiérarchique entre COMMUNE et CV: s'il y a des CV correspondant à 1 commune unique, il y a aussi des CV à plus de 100 communes...
+
+```{r}
+decoupage_admin_2022 %>% 
+  dplyr::select(-dplyr::matches("iris"), -grd_quart_code) %>% 
+  dplyr::distinct() %>% 
+  dplyr::summarize(
+    n_total = dplyr::n(),
+    n_distinct_COMMUNE = dplyr::n_distinct(com_code),
+    n_distinct_COMMUNE_ARM = dplyr::n_distinct(com_arm_code),
+    n_distinct_CANTVILLE = dplyr::n_distinct(cv_code),
+    n_distinct_DEP = dplyr::n_distinct(dep_code),
+    n_distinct_REG = dplyr::n_distinct(reg_code)
+  )
+```
+
+Utilisation de la fonction qui détecte les lignes avec problème de hiérarchie
+
+```{r}
+## tests: Il y a bel est bien une hiérarchie entre les différents niveaux administratifs décrits ici
+decoupage_admin_2022 %>% 
+  keep_non_hierarchic_rows(reg_code, dep_code)
+decoupage_admin_2022 %>% 
+  keep_non_hierarchic_rows(dep_code, cv_code)
+decoupage_admin_2022 %>% 
+  keep_non_hierarchic_rows(cv_code, com_arm_code)
+```
+
+SOLVED: Attention: il y a 3 dep_code sans cv_code, ce qui concerne 5 communes !! Ils n'ont pas de code CV, mais tout de même un code COM ce qui peut être suffisant pour la jointure avec le fichier détail INDCVI, mais posera un problème si on souhaite un niveau de granularité au CV.
+Ce problème venait d'un problème lors de la jointure sur la variable UU2020 qui possédait des codes éronnés pour 5 observations pour une des 2 varaibles...
+
+### NA dans le découpage admin
+
+5 lignes contiennent des NA :(, il faut prévenir l'INSEE...et vérifier qu'il n'y a pas eu de maj du fichier admin....
+C'est bon il n'y en a plus: l'INSEE a corrigé 5 UU2020 qui étaient fausses dans le fichier communal, mais pas corrigées dans le fichier infracommunal. Ce qui créait des NA lors de la jointure.
+
+https://www.insee.fr/fr/information/7671844
+
+Avertissement : les tables d’appartenance géographique des communes diffusées pour les millésimes 2020 à 2023 contenaient deux erreurs concernant les unités urbaines de Genève-Annemasse (00653) et de Paris (00851). Ces erreurs ont été corrigées dans les tables diffusées le 2 avril 2024 :
+- La commune de Boëge (74037) a été retirée de l’unité urbaine de Genève-Annemasse (00653).
+- Les communes de Saint-Rémy-l’Honoré (78576), Bazoches-sur-Guyonne (78050) et Le Tremblay-sur-Mauldre (78623) ont été retirée de l’unité urbaine de Paris (00851) et constituent l’unité urbaine de Saint-Rémy-l’Honoré (78109).
+
+Avertissement : une première version de la table d’appartenance géographique des communes a été diffusée pour les millésimes 2020 à 2022. Ces tables contenaient deux erreurs concernant les unités urbaines du Mans (72701) et de Paris (00851). Les communes de Mulsanne (72213) et Ennery (95211) ont été retirées respectivement des unités urbaines du Mans et de Paris, et forment désormais les unités urbaines respectives de Mulsanne (72107) et Ennery (95108). Ces erreurs ont été corrigées dans la table diffusée le 11/05/2023 pour les millésimes 2020 à 2022.
+
+```{r}
+decoupage_admin_2022 %>% 
+  # dplyr::filter(dplyr::if_any(dplyr::everything(), is.na)) # c(iris_code, cv_code)
+  dplyr::filter(dplyr::if_any(!dplyr::any_of(c("arm_code", "arm_lib")), is.na)) # il y a des NA pour arm_code pour toutes les communes sauf 3...
+```
+
+Quelques communes ont des na de cv_code: ce sont des communes non-découpées en IRIS.
+
+```{r}
+decoupage_admin_2022 %>% 
+  # dplyr::filter(dep_code %in% c("74", "78", "95")) %>% 
+  dplyr::group_by(com_code) %>% 
+  dplyr::filter(any(is.na(cv_code))) #%>% 
+  # dplyr::pull(iris_code) %>% 
+  # dput()
+  # dplyr::pull(com_code) %>%
+  # dput()
+## Note: comme ces iris ont des NA pour la variable cv_code, il faudra les vérifier dans les fichiers détail insee
+# c("740370000", "780500000", "785760000", "786230000", "952110000")
+# c("74037", "78050", "78576", "78623", "95211")
+```
+
+Recherche des IRIS autour de Boëge: La numérotation des IRIS ne nous assure pas de leur contiguité géographique... Ils ont été recl&ssés avec la nouvelle fonction.
+
+```{r}
+decoupage_admin_2022 %>% 
+  dplyr::filter(
+    iris_code == "740370000" | 
+      dplyr::lead(iris_code == "740370000") | 
+      dplyr::lag(iris_code == "740370000") | 
+      dplyr::lag(cv_code == "7408") | 
+      dplyr::lag(cv_code == "7415")
+  ) %>% 
+  dplyr::arrange(iris_code)
+```
+
+DONE: Test pour trouver les communes environnantes à une commune donnée. Il faut trouver sur internet comment trouver les IRIS autour en utilisant le fichier géographique !!
+
+```{r}
+dplyr::filter(sf_IRIS_2022, iris_code == "740370000") %>% 
+  sf::st_touches(sf_IRIS_2022)
+```
+
+```{r}
+sf_IRIS_2022[c(1538, 7614, 16975, 18165, 18675, 31586, 41481, 45828), ] %>% 
+  dplyr::pull(.data$iris_code) %>% 
+  dput()
+```
+
+```{r}
+decoupage_admin_2022 %>% 
+  dplyr::filter(iris_code %in% c("740940000", "742260000", "740500000", "743010000", "742610000", "742290000", "740380000", "740430000"))
+```
+
+```{r}
+sf_IRIS_2022[c(1538, 7614, 16975, 18165, 18675, 31586, 41481, 45828), ] %>% 
+  dplyr::left_join(decoupage_admin_2022, by = c("iris_code", "com_arm_code")) %>% 
+  ggplot2::ggplot(ggplot2::aes(fill = cv_code)) +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+Extension aux iris suivants
+
+```{r}
+sf_IRIS_2022[c(1538, 7614, 16975, 18165, 18675, 31586, 41481, 45828), ] %>% 
+  sf::st_touches(sf_IRIS_2022) %>% 
+  unlist() %>% 
+  unique() %>% 
+  dput()
+```
+
+Tracé: vu le découpage des CV, la valeur manquante a toutes les chances d'être `code_cv == "7415"` (violette).
+
+```{r}
+sf_IRIS_2022[c(835L, 2782L, 7193L, 7614L, 13954L, 16136L, 21264L, 23296L, 
+               31586L, 46669L, 1538L, 4711L, 22220L, 41481L, 11475L, 18165L, 
+               18675L, 27890L, 16975L, 40758L, 45779L, 19089L, 45828L, 6150L, 
+               474L, 4817L, 16402L, 19621L, 34366L), ] %>% 
+  dplyr::left_join(decoupage_admin_2022, by = c("iris_code", "com_arm_code")) %>% 
+  ggplot2::ggplot(ggplot2::aes(fill = cv_code)) +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+DONE: généraliser la méthode `filter_polygons_by_distance` pour la centrer sur la zone à pb
+TODO: exporter la fonction dans un package `spatial.computer`.
+
+Test de la fonction
+
+un seul polygone
+
+```{r}
+sf_IRIS_2022 %>% 
+  filter_polygons_by_distance("iris_code", "740370000", 15000) %>% 
+  dplyr::left_join(decoupage_admin_2022, by = c("iris_code", "com_arm_code")) %>% 
+  ggplot2::ggplot(ggplot2::aes(fill = cv_code)) +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+deux polygones: ça fonctionne, mais c'est peu pratique, sauf dans le cas d'une carto interactive.
+
+```{r}
+sf_IRIS_2022 %>% 
+  filter_polygons_by_distance("iris_code", c("740370000", "780500000"), 15000) %>% 
+  dplyr::left_join(decoupage_admin_2022, by = c("iris_code", "com_arm_code")) %>% 
+  ggplot2::ggplot(ggplot2::aes(fill = cv_code)) +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+On voit direct les 3 polygones qui posent problème:
+
+```{r}
+sf_IRIS_2022 %>% 
+  filter_polygons_by_distance("iris_code", c("780500000"), 14000) %>% 
+  dplyr::left_join(decoupage_admin_2022, by = c("iris_code", "com_arm_code")) %>% 
+  ggplot2::ggplot(ggplot2::aes(fill = cv_code)) +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+Pour le polygone 95xx, à moins d'une discontinuité de la zone turquoise, on attend cv_code == 9516 !!
+
+```{r}
+sf_IRIS_2022 %>% 
+  filter_polygons_by_distance("iris_code", c("952110000"), 4000) %>% 
+  dplyr::left_join(decoupage_admin_2022, by = c("iris_code", "com_arm_code")) %>% 
+  ggplot2::ggplot(ggplot2::aes(fill = cv_code)) +
+  ggplot2::geom_sf() +
+  ggplot2::coord_sf()
+```
+
+### Résolution des NA de cv_code 2022 à l'aide des données 2023
+
+Est-ce que ces communes ont des données manquantes pour le découpage 2023 ?
+
+Seule `Ennery (commune non irisée)` est complétée pour le millésime 2023, et elle correspond bien au cv_code "9516" que nous avions imputé, les 4 autres communes restent avec des valeurs manquantes...
+
+```{r}
+# decoupage_admin_2023 %>% 
+#   dplyr::filter(
+#     com_arm_code %in% c("74037", "78050", "78576", "78623", "95211") |
+#       is.na(cv_code)
+#   )
+
+```
+
+
+```{r}
+# # sf_IRIS_2022 %>% 
+#   sf_IRIS_2022[c(835L, 2782L, 7193L, 7614L, 13954L, 16136L, 21264L, 23296L, 
+#                31586L, 46669L, 1538L, 4711L, 22220L, 41481L, 11475L, 18165L, 
+#                18675L, 27890L, 16975L, 40758L, 45779L, 19089L, 45828L, 6150L, 
+#                474L, 4817L, 16402L, 19621L, 34366L), ] %>% 
+#   # ggplot2::ggplot() +
+#   # ggplot2::geom_sf(fill = "red") +
+#   # ggplot2::coord_sf()
+#   dplyr::left_join(decoupage_admin_2022, by = c("iris_code", "com_arm_code")) %>% 
+#   dplyr::mutate(cv_code = factor(cv_code)) %>% 
+#   sf::st_transform(crs = sf::st_crs(4326)) %>%
+#   leaflet::leaflet() %>%
+#   leaflet::addTiles(group = "OSM") %>%
+#   leaflet::addProviderTiles(provider = leaflet::providers$CartoDB.Positron, group = "CartoDB") %>%
+#   leaflet::addProviderTiles(provider = leaflet::providers$Stadia.StamenToner, group = "Toner") %>%
+#   leaflet::addPolygons(layerId = ~iris_code, #fill = ~cv_code, 
+#                        fillColor = ~cv_code,
+#                        color = NA, stroke = FALSE,
+#                        weight = .01
+#                        ) %>%
+#   # leaflet::addPolygons(      # cre
+#   #   layerId = ~iris_code
+#   #   # group = "cre",
+#   #   , stroke = FALSE,       # options for stroke (border of the polygons)
+#   #   # color = "white",
+#   #   # , weight = .01
+#   #   # , fillColor = ~pal()(cre_fort)
+#   #   , fillOpacity = .8
+#   #   , smoothFactor = .5,
+#   #   # highlight = leaflet::highlightOptions(
+#   #   highlight = leaflet::highlightOptions(
+#   #     weight = 1,
+#   #     color = "#666",
+#   #     # dashArray = "",
+#   #     fillOpacity = 0.8,
+#   #     bringToFront = TRUE)
+#   #   # , label = adapt_labels("cre_fort")
+#   #   # , label = labels_cre()
+#   # ) %>%
+#   leaflet::setView(lng = 1.87528, lat = 46.60611, zoom = 6) %>%
+#   leaflet::addScaleBar(position = "bottomright",
+#                        options = leaflet::scaleBarOptions(imperial = FALSE)) %>%
+#   leaflet::addEasyButton(leaflet::easyButton(
+#     icon="fa-globe", title="Centrage",
+#     onClick=htmlwidgets::JS("function(btn, map){ map.setView([46.606, 1.875], 6); }"))) %>%
+#   leaflet::addLayersControl(baseGroups = c("CartoDB", "OSM", "Toner"), position = "topright")
+```
+
+Et tracé du nombre de communes par CV:
+
+```{r}
+decoupage_admin_2022 %>% 
+  dplyr::distinct(com_arm_code, cv_code) %>% 
+  dplyr::group_by(cv_code) %>% 
+  dplyr::count() %>% 
+  dplyr::arrange(desc(n)) %>% 
+  ggplot2::ggplot(ggplot2::aes(n)) +
+  ggplot2::geom_density() +
+  ggplot2::scale_x_log10()
+```
+
+On vérifie que pour une commune donnée il ne peut y avoir qu'un CV (i.e. pas de commune avec une intersection de 2 CV: la relation est bien hiérarchique)
+
+```{r}
+decoupage_admin_2022 %>% 
+  dplyr::distinct(com_arm_code, cv_code) %>% 
+  dplyr::group_by(com_arm_code) %>% 
+  dplyr::filter(dplyr::n() > 1)
+```
+

@@ -1,0 +1,623 @@
+---
+title: "decoupage-admin-spatial"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{decoupage-admin-spatial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+
+## Parametrage du theme ggplot
+ggplot2::theme_set(ggplot2::theme_minimal())
+# theme_update(panel.background = element_rect(fill = "transparent", colour = NA),
+#              plot.background = element_rect(fill = "transparent", colour = NA))
+# opts_chunk$set(dev.args=list(bg="transparent"))
+```
+
+```{r setup}
+library(insee.admin)
+requireNamespace("insee.admin.data.2022", quietly = TRUE)
+```
+
+Représentation des différentes granularités du découpage administratif français. Les fichiers se trouvent dans le package:
+
+- ADMIN-EXPRESS-COG pour la représentation des niveaux supracommunaux dans le Geodetic CRS: WGS 84.
+- COUTOURS-IRIS pour le contours des IRIS
+
+Attention: les noms ne sont pas consistants entre les 2 types de fichier:
+
+- ADMIN-EXPRESS-COG: INSEE_COM correspond à com_code (sans découpage pour communes avec ARM)
+- CONTOURS-IRIS: INSEE_COM correspond à com_arm_code (avec découpage pour communes avec ARM)
+
+```{r}
+path_to_shp_cog_2022 <- insee.admin.data.2022::path_to_extdata("IGN/ADMIN-EXPRESS-COG")
+path_to_shp_contours_iris_2022 <- insee.admin.data.2022::path_to_extdata("IGN/CONTOURS-IRIS")
+```
+
+## IRIS
+
+Attention, avec le fichier supracommunal COMMUNE le com_code pour Paris est 75056 et il est unique. Il faut utiliser le fichier ARM et utiliser le ARM_code pour obtenir les com_code dans Paris qui font le lien avec les INSEE_COM du fichier CONTOURS-IRIS de l'IGN...
+
+```{r}
+path_to_shp_contours_iris_2022 <- insee.admin.data.2022::path_to_extdata("IGN/CONTOURS-IRIS")
+sf_raw <- sf::st_read(dsn = path_to_shp_contours_iris_2022, layer = "CONTOURS-IRIS")
+
+sf_raw %>% 
+  dplyr::filter(stringr::str_detect(INSEE_COM, "^75"))
+```
+
+Procédure automatique avec unification des noms de colonne:
+
+Pipeline distinct pour IRIS et autre découpage du COG:
+
+IRIS
+
+```{r}
+sf_IRIS_2022 <- pipeline_sf_IRIS(path_to_shp_contours_iris_2022, layer = "CONTOURS-IRIS")
+```
+
+```{r}
+sf_IRIS_2022 %>% 
+  dplyr::filter(stringr::str_detect(.data$com_arm_code, "^75"))
+```
+
+
+COG
+
+```{r}
+path_to_shp_cog_2022 <- insee.admin.data.2022::path_to_extdata("IGN/ADMIN-EXPRESS-COG")
+sf_COM_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, layer = "COMMUNE")
+sf_ARM_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, layer = "ARRONDISSEMENT_MUNICIPAL")
+com_code_11_24 <- sf_COM_2022 %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::filter(.data$reg_code %in% c("11", "24")) %>% 
+  dplyr::pull(.data$com_code)
+arm_code_11_24 <- sf_ARM_2022 %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::filter(.data$com_code %in% c("75056")) %>% 
+  dplyr::pull(.data$arm_code)
+```
+
+Tracé avec ggplot2 en ne prenant que le com_code donné dans le fichier de communes: cette clef ne fonctionne pas avec Paris pour le fichier IRIS
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_IRIS_2022 %>% 
+  dplyr::filter(.data$com_arm_code %in% c(com_code_11_24, arm_code_11_24)) %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(fill= "red") +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+Tracé avec ggplot2 en ajoutant les ARM: c'est bon, tous les IRIS sont tracés
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_IRIS_2022 %>% 
+  dplyr::filter(.data$com_arm_code %in% c(com_code_11_24, arm_code_11_24)) %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(fill= "red") +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+## REG
+
+```{r}
+sf_REG_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, "REGION")
+```
+
+Tracé avec ggplot2, en se limitant à `l'IdF` et `Centre Val de Loire`:
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_REG_2022 %>% 
+  dplyr::filter(.data$reg_code %in% c("11", "24")) %>%
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(fill = "red") +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+## DEP
+
+```{r}
+sf_DEP_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, "DEPARTEMENT")
+```
+
+Tracé avec ggplot2, en se limitant à `l'IdF` et `Centre Val de Loire`:
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_DEP_2022 %>% 
+  dplyr::filter(.data$reg_code %in% c("11", "24")) %>%
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(fill = "red") +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+## ARR
+
+```{r}
+sf_ARR_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, "ARRONDISSEMENT")
+```
+
+Tracé avec ggplot2, en se limitant à `l'IdF` et `Centre Val de Loire`:
+
+Il y a des numéros d'arrondissement numérotés par DEP, numérotés de 1 à n en fonction du nombre défini dans chaque département. Ce ne sont pas les arrondissements parisiens (ou Lyon ou Marseille).
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_ARR_2022 %>% 
+  dplyr::filter(.data$reg_code %in% c("11", "24")) %>%
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(fill = "red") +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+## ARRONDISSEMENT_MUNICIPAL
+
+A priori, il s'agit bien des ARM pour Lyon, Marseille et Paris. Par contre, la seule autre colonne pour faire le lien est le com_code (1 pour chaque ville): 
+
+```{r}
+sf_ARM_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, "ARRONDISSEMENT_MUNICIPAL")
+```
+
+Tracé avec ggplot2, en se limitant à `l'IdF` et `Centre Val de Loire`:
+
+Il y a des numéros d'arrondissement numérotés par DEP, numérotés de 1 à n en fonction du nombre défini dans chaque département. Ce ne sont pas les arrondissements parisiens (ou Lyon ou Marseille).
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_ARM_2022 %>% 
+  # dplyr::semi_join(sf_ARR_2022 %>% 
+  #                    as.data.frame() %>% 
+  #                    dplyr::filter(.data$reg_code %in% c("11")), by = "com_code") %>% # , "24"
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(linewidth = .2) +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+## CAN
+
+```{r}
+sf_CAN_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, "CANTON")
+```
+
+Tracé avec ggplot2, en se limitant à `l'IdF` et `Centre Val de Loire`:
+
+Paris correspond à 1 seul canton
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_CAN_2022 %>% 
+  dplyr::filter(.data$reg_code %in% c("11", "24")) %>%
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(fill = "red") +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+## COM
+
+En fait, les code INSEE ne sont pas du tout consistants: ici INSEE_COM correspond aux code_com sans ARM, alors que dans le fichier coutours iris INSEE_COM est associé au code COM_ARM_code !!!
+
+```{r}
+sf_COM_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, "COMMUNE")
+
+## quid des COM avec ARM
+sf_COM_2022 %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::filter(stringr::str_detect(com_code, "^75"))
+```
+
+Tracé avec ggplot2, en se limitant à `l'IdF` et `Centre Val de Loire`:
+
+Paris correspond à 1 seule commune.
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_COM_2022 %>% 
+  dplyr::filter(.data$reg_code %in% c("11", "24")) %>%
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(fill = "red") +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+## COL: COLLECTIVITE_TERRITORIALE
+
+Il ne semble pas y avoir d'autre clef pour les collectivités territoriales...
+
+```{r}
+sf_COL_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, "COLLECTIVITE_TERRITORIALE")
+```
+
+Tracé avec ggplot2, en se limitant à `l'IdF` et `Centre Val de Loire`:
+
+```{r}
+## La carte met du temps à générer (au moins 10sec)
+sf_COL_2022 %>% 
+  sf::st_intersection(sf_DEP_2022 %>%
+  dplyr::filter(.data$reg_code %in% c("11", "24"))) %>%
+  dplyr::filter(.data$reg_code %in% c("11", "24")) %>%
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(linewidth = .2) +
+  ggplot2::coord_sf()
+  # ggplot2::coord_sf(crs = sf::st_crs(4326))
+```
+
+## EPCI autour de Grenoble
+
+```{r}
+sf_EPCI_2022 <- pipeline_sf_admin_express_cog(path_to_shp_cog_2022, "EPCI")
+```
+
+```{r}
+# ## Présélection par nom:
+# vec_nom <- c("Bièvre", "Voironnais",
+#              "Chartreuse", "Grésivaudan", "Vercors", "Grenoble", "Trièves",
+#              "Matheysine", "Oisans")
+# regex_vec_nom <- paste(vec_nom, collapse = "|")
+# 
+# sf_EPCI_2022 %>%
+#   dplyr::filter(stringr::str_detect(.data$nom, regex_vec_nom))
+```
+
+### Sélection de la zone d'intérêt
+
+```{r}
+## par code siren: permet de réduire l'espace des noms aux seuls secteurs d'intérêt
+code_siren_grenoble <- c("200059392", "243801073", "243800984", "243801024", 
+                         "200018166", "200070431", "200040111", "200040715", 
+                         "200030658", "200040657", "243800745")
+regex_code_siren <- paste(code_siren_grenoble, collapse = "|")
+sf_EPCI_2022_Grenoblois <- sf_EPCI_2022 %>% 
+  dplyr::filter(stringr::str_detect(.data$code_siren, regex_code_siren))
+sf_EPCI_2022_Grenoblois
+```
+
+### Tracé des zones
+
+```{r}
+sf_EPCI_2022_Grenoblois %>% 
+  ggplot2::ggplot(ggplot2::aes(fill = nature)) +
+  ggplot2::geom_sf(linewidth = .2) + # linetype = "dotted", 
+  ggplot2::coord_sf()
+```
+
+<!-- Lien entre EPCI du Grenoblois et autres divisions spatiales: -->
+
+<!-- ```{r} -->
+<!-- decoupage_admin_2022_Grenoblois <- insee.admin.data.2022::insee_admin_decoupage_2022 %>%  -->
+<!--   dplyr::filter(stringr::str_detect(.data$epci, regex_code_siren)) -->
+
+<!-- iris_code_Grenoblois <- decoupage_admin_2022_Grenoblois %>%  -->
+<!--   dplyr::pull(iris_code) -->
+<!-- ``` -->
+
+<!-- Extraction de la zone grenobloise du rp logemt -->
+
+<!-- ```{r} -->
+<!-- vars_rp_detail_spatial_names_Grenoblois <- c("IRIS", "CATIRIS", "COMMUNE", "CANTVILLE", "ARM", "DEPT",  -->
+<!--                                              "IPONDL", "CATL", -->
+<!--                                              "AGEMEN8", "SEXEM", "TACTM", # "EMPLM",  -->
+<!--                                              "INPER", "INP17M", # "INPAM", -->
+<!--                                              "TRANSM", "VOIT", "DEROU" -->
+<!--                                              ) -->
+
+<!-- vars_rp_detail_spatial_types_Grenoblois <- vroom::cols_only( -->
+<!--   IRIS = vroom::col_character(), -->
+<!--   TRIRIS = vroom::col_character(), -->
+<!--   CATIRIS = vroom::col_character(), -->
+<!--   COMMUNE = vroom::col_character(), -->
+<!--   CANTVILLE = vroom::col_character(), -->
+<!--   ARM = vroom::col_character(), -->
+<!--   DEPT = vroom::col_character(), -->
+<!--   REGION = vroom::col_character(), -->
+<!--   IPONDL = vroom::col_double(), -->
+<!--   CATL =  vroom::col_character(), -->
+<!--   LPRM = vroom::col_character(), -->
+<!--   METRODOM = vroom::col_character(), -->
+<!--   AGEMEN8 = vroom::col_character(), -->
+<!--   SEXEM = vroom::col_character(), -->
+<!--   # EMPLM = vroom::col_character(), -->
+<!--   TACTM = vroom::col_character(), -->
+<!--   INPER = vroom::col_character(), -->
+<!--   INP17M = vroom::col_character(), -->
+<!--   TRANSM = vroom::col_character(), -->
+<!--   VOIT = vroom::col_character(), -->
+<!--   DEROU = vroom::col_character() -->
+<!-- ) -->
+
+<!-- rp_logemt_prepared <- pipeline_rp_logemt(file = path_to_extdata("RP-detail/LOGEMT/FD_LOGEMT_2020.csv"), -->
+<!--   col_types = vars_rp_detail_spatial_types_Grenoblois, -->
+<!--   col_select = dplyr::any_of(vars_rp_detail_spatial_names_Grenoblois) -->
+<!--   ) %>%  -->
+<!--   dplyr::filter(iris_code %in% iris_code_Grenoblois) -->
+<!-- ``` -->
+
+<!-- Stats -->
+
+
+<!-- recode -->
+
+<!-- ```{r} -->
+<!-- recode_rp_logemt <- function(data) { -->
+<!--   data %>%  -->
+<!--     dplyr::mutate( -->
+<!--       dplyr::across(.cols = c("inper", "inp17m", "voit", "derou"), .fns = as.numeric), -->
+<!--       inp_majeur = dplyr::case_when( -->
+<!--         dplyr::near(.data$inper,  .data$inp17m) ~ inp17m, -->
+<!--         TRUE ~ `-`(.data$inper,  .data$inp17m)), -->
+<!--       voit_per_inp_majeur = `/`(.data$voit,  .data$inp_majeur), -->
+<!--       sexem = factor(.data$sexem, levels = c("1", "2"), labels = c("H", "F")), -->
+<!--       tactm = factor(.data$tactm), -->
+<!--       catl = factor(.data$catl, levels = c("1", "2", "3", "4", "Z"),  -->
+<!--                     labels = c("Résidences principales",  -->
+<!--                                "Logements occasionnels",  -->
+<!--                                "Résidences secondaires", -->
+<!--                                "Logements vacants",  -->
+<!--                                "Hors logement ordinaire")) -->
+<!--     ) -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- Quelles-sont les catégories de logement -->
+
+<!-- ```{r} -->
+<!-- rp_logemt_prepared %>%  -->
+<!--   recode_rp_logemt() %>%  -->
+<!--   # dplyr::filter(is.infinite(voit_per_inp_majeur)) -->
+<!--   dplyr::count(.data$catl) -->
+<!--   # dplyr::slice(1:10) -->
+<!-- ``` -->
+
+<!-- summarize -->
+
+<!-- ```{r} -->
+<!-- # IRIS -->
+<!-- summarized_rp_logemt_Grenoblois_iris <- rp_logemt_prepared %>%  -->
+<!--   recode_rp_logemt() %>%  -->
+<!--   dplyr::left_join(decoupage_admin_2022_Grenoblois %>% dplyr::select(iris_code, epci), by = "iris_code") %>%  -->
+<!--   dplyr::group_by(iris_code, epci) %>%  -->
+<!--   dplyr::summarise( -->
+<!--     mean_inper = weighted.mean(inper, ipondl, na.rm = TRUE), -->
+<!--     mean_voit = weighted.mean(voit, ipondl, na.rm = TRUE), -->
+<!--     # mean_voit_per_inpam = weighted.mean(voit_per_inpam, ipondl, na.rm = TRUE), -->
+<!--     mean_voit_per_inp_majeur = weighted.mean(voit_per_inp_majeur, ipondl, na.rm = TRUE), -->
+<!--     frac_Hommes = weighted.mean(sexem == "H", ipondl, na.rm = TRUE), -->
+<!--     transm_aucun = weighted.mean(transm == "1", ipondl, na.rm = TRUE), -->
+<!--     transm_marche = weighted.mean(transm == "2", ipondl, na.rm = TRUE), -->
+<!--     transm_velo = weighted.mean(transm == "3", ipondl, na.rm = TRUE), -->
+<!--     transm_moto = weighted.mean(transm == "4", ipondl, na.rm = TRUE), -->
+<!--     transm_voiture = weighted.mean(transm == "5", ipondl, na.rm = TRUE), -->
+<!--     transm_transport_commun = weighted.mean(transm == "6", ipondl, na.rm = TRUE) -->
+<!--     ) %>%  -->
+<!--   dplyr::ungroup() -->
+<!-- # EPCI -->
+<!-- summarized_rp_logemt_Grenoblois_epci <- rp_logemt_prepared %>%  -->
+<!--   recode_rp_logemt() %>%  -->
+<!--   dplyr::left_join(decoupage_admin_2022_Grenoblois %>% dplyr::select(iris_code, epci), by = "iris_code") %>%  -->
+<!--   dplyr::group_by(epci) %>%  -->
+<!--  dplyr::summarise( -->
+<!--     mean_inper = weighted.mean(inper, ipondl, na.rm = TRUE), -->
+<!--     mean_voit = weighted.mean(voit, ipondl, na.rm = TRUE), -->
+<!--     mean_voit_per_inp_majeur = weighted.mean(voit_per_inp_majeur, ipondl, na.rm = TRUE), -->
+<!--     frac_Hommes = weighted.mean(sexem == "H", ipondl, na.rm = TRUE), -->
+<!--     transm_aucun = weighted.mean(transm == "1", ipondl, na.rm = TRUE), -->
+<!--     transm_marche = weighted.mean(transm == "2", ipondl, na.rm = TRUE), -->
+<!--     transm_velo = weighted.mean(transm == "3", ipondl, na.rm = TRUE), -->
+<!--     transm_moto = weighted.mean(transm == "4", ipondl, na.rm = TRUE), -->
+<!--     transm_voiture = weighted.mean(transm == "5", ipondl, na.rm = TRUE), -->
+<!--     transm_transport_commun = weighted.mean(transm == "6", ipondl, na.rm = TRUE) -->
+<!--     ) %>%  -->
+<!--   dplyr::ungroup() -->
+<!-- ``` -->
+
+<!-- Tableau epci: -->
+
+<!-- ```{r} -->
+<!-- summarized_rp_logemt_Grenoblois_epci -->
+<!-- ``` -->
+
+
+<!-- Tracé du nombre de voitures par logement par epci -->
+
+<!-- ```{r} -->
+<!-- sf_EPCI_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_epci, by = c("code_siren" = "epci")) %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = mean_voit)) + -->
+<!--   ggplot2::geom_sf(linewidth = .2) +  -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Nombre de voitures par logement", fill = "Nombre moyen de voitures", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+<!-- Nombre de voitures par personne majeure dans le logement -->
+
+<!-- ```{r} -->
+<!-- sf_EPCI_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_epci, by = c("code_siren" = "epci")) %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = mean_voit_per_inp_majeur)) + -->
+<!--   ggplot2::geom_sf(linewidth = .2) +  -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Nombre de voitures par actif dans le logement", fill = "Nombre moyen", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+<!-- Tracé de la fraction des logements dont le transport majoritaire de la personne de ref est la voiture par epci -->
+
+<!-- ```{r} -->
+<!-- sf_EPCI_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_epci, by = c("code_siren" = "epci")) %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = transm_voiture)) + -->
+<!--   ggplot2::geom_sf(linewidth = .2) +  -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Utilisation majoritaire: voiture", fill = "Fraction des utilisateurs", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+<!-- Tracé de la fraction des logements dont le transport majoritaire de la personne de ref est les transports en commun par epci -->
+
+<!-- ```{r} -->
+<!-- sf_EPCI_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_epci, by = c("code_siren" = "epci")) %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = transm_transport_commun)) + -->
+<!--   ggplot2::geom_sf(linewidth = .2) + -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Utilisation majoritaire: transport en commun", fill = "Fraction des utilisateurs", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+<!-- Tracé de la fraction des logements dont le transport majoritaire de la personne de ref est la marche par epci -->
+
+<!-- ```{r} -->
+<!-- sf_EPCI_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_epci, by = c("code_siren" = "epci")) %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = transm_marche)) + -->
+<!--   ggplot2::geom_sf(linewidth = .2) + -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") -->
+<!-- ``` -->
+
+<!-- Tracé du nombre de voitures par logement par IRIS -->
+
+<!-- ```{r} -->
+<!-- sf_IRIS_2022 <- pipeline_sf_IRIS(path_to_shp_contours_iris_2022, layer = "CONTOURS-IRIS") -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- sf_IRIS_2022_Grenoblois <- sf_IRIS_2022 %>%  -->
+<!--   dplyr::filter(iris_code %in% iris_code_Grenoblois) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- sf_IRIS_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_iris, by = "iris_code") %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = mean_voit)) + -->
+<!--   ggplot2::geom_sf(linewidth = 0) + -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Nombre de voitures par logement", subtitle = "Hétérogénéité sur le territoire",  -->
+<!--                 fill = "Nombre moyen de voitures", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+<!-- Nombre de voitures par personne majeure dans le logement -->
+
+<!-- ```{r} -->
+<!-- sf_IRIS_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_iris, by = "iris_code") %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = mean_voit_per_inp_majeur)) + -->
+<!--   ggplot2::geom_sf(linewidth = 0) +  -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Nombre de voitures par actif dans le logement", subtitle = "Hétérogénéité sur le territoire", -->
+<!--                 fill = "Nombre moyen", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+<!-- zoom sur Grenoble -->
+
+<!-- ```{r} -->
+<!-- sf_IRIS_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_iris, by = "iris_code") %>%  -->
+<!--   dplyr::filter(epci == "200040715") %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = mean_voit_per_inp_majeur)) + -->
+<!--   ggplot2::geom_sf(linewidth = 0) + -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Nombre de voitures par actif dans le logement", subtitle = "Hétérogénéité sur le territoire", -->
+<!--                 fill = "Nombre moyen", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+<!-- Type de transport -->
+
+<!-- Tracé de la fraction des logements dont le transport majoritaire de la personne de ref est la voiture par IRIS -->
+
+<!-- ```{r} -->
+<!-- sf_IRIS_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_iris, by = "iris_code") %>%  -->
+<!--   dplyr::filter(epci == "200040715") %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = transm_voiture)) + -->
+<!--   ggplot2::geom_sf(linewidth = 0) + -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Utilisation majoritaire: voiture", subtitle = "Hétérogénéité sur le territoire", -->
+<!--                 fill = "Fraction des utilisateurs", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+<!-- zoom sur Grenoble -->
+
+<!-- ```{r} -->
+<!-- sf_IRIS_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_iris, by = "iris_code") %>%  -->
+<!--   dplyr::filter(epci == "200040715") %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = transm_voiture)) + -->
+<!--   ggplot2::geom_sf(linewidth = 0) + -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Utilisation majoritaire: voiture", subtitle = "Hétérogénéité sur le territoire", -->
+<!--                 fill = "Fraction des utilisateurs", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+<!-- Tracé de la fraction des logements dont le transport majoritaire de la personne de ref est les transports en commun par IRIS -->
+
+<!-- ```{r} -->
+<!-- sf_IRIS_2022_Grenoblois %>%  -->
+<!--   dplyr::left_join(summarized_rp_logemt_Grenoblois_iris, by = "iris_code") %>%  -->
+<!--   ggplot2::ggplot(ggplot2::aes(fill = transm_transport_commun)) + -->
+<!--   ggplot2::geom_sf(linewidth = 0) + -->
+<!--   ggplot2::coord_sf() + -->
+<!--   ggplot2::scale_fill_continuous(type = "viridis") + -->
+<!--   ggplot2::labs(title = "Utilisation majoritaire: transport en commun",  -->
+<!--                 fill = "Fraction des utilisateurs", subtitle = "Hétérogénéité sur le territoire", -->
+<!--                 caption = "INSEE logement 2020") -->
+<!-- ``` -->
+
+
+<!-- library(sf) -->
+<!-- library(dplyr) -->
+<!-- library(ggplot2) -->
+
+<!-- # Charger des données exemple -->
+<!-- nc <- sf::st_read(system.file("shape/nc.shp", package = "sf")) -->
+
+<!-- # Agrégation par type (catégorie) -->
+<!-- resultat <- nc %>% -->
+<!--   dplyr::group_by(CNTY_ID) %>%  # Variable catégorielle -->
+<!--   dplyr::summarise( -->
+<!--     total_area = sum(AREA, na.rm = TRUE), -->
+<!--     mean_bir = mean(BIR74, na.rm = TRUE), -->
+<!--     .groups = "drop" -->
+<!--   ) -->
+
+<!-- # La géométrie est automatiquement agrégée (union) -->
+<!-- plot(resultat["total_area"]) -->
+
+
+<!-- # Agrégation avec union des géométries -->
+<!-- agrege <- nc %>% -->
+<!--   group_by(CNTY_ID) %>% -->
+<!--   summarise(do_union = TRUE)  # Fusion explicite des géométries -->
+
+<!-- # Vérifier le type de géométrie résultant -->
+<!-- st_geometry_type(agrege) %>% table() -->
