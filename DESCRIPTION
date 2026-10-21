@@ -26,6 +26,8 @@ Suggests:
     knitr,
     rmarkdown,
     tibble (>= 3.1.0)
+Remotes:
+    AcidyBee/insee.admin.data.2022
 VignetteBuilder: 
     knitr
 Encoding: UTF-8
